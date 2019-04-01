@@ -154,11 +154,12 @@ def extract_features(directory, sample_count):
                                             batch_size=batch_size, class_mode='binary') # data generator
     i = 0
     for inputs_batch, labels_batch in generator:
-        if i * batch_size > sample_count: # batch가 data 넘어갈 경우
+        if i * batch_size >= sample_count: # batch가 data 넘어갈 경우
             break
         features_batch = conv_base.predict(inputs_batch)
         features[i * batch_size: (i+1) * batch_size] = features_batch
         labels[i * batch_size: (i+1) * batch_size] = labels_batch
+        print("%dth features[%d: %d] complete" %(i, i*batch_size, (i+1)*batch_size))
         i += 1
     return features, labels
 
@@ -169,6 +170,8 @@ test_features, test_labels = extract_features(test_dir, 1000)
 train_features = np.reshape(train_features, (2000, 4*4*512))
 validation_features = np.reshape(validation_features, (1000, 4* 4* 512))
 test_features = np.reshape(test_features, (1000, 4*4*512)) 
+train_labels = train_labels.reshape([train_labels.shape[0], 1])
+validation_labels = validation_labels.reshape([validation_labels.shape[0], 1])
 
 ## keras building ##
 model = models.Sequential()
@@ -181,16 +184,91 @@ model.compile(optimizer=optimizers.adam(),
 history = model.fit(train_features, train_labels,
                     epochs=30, batch_size=20, validation_data=(validation_features, validation_labels))
 
-i = 0
-generator = datagen.flow_from_directory(train_dir, target_size=(150, 150), batch_size=20, class_mode='binary')
-for inputs_batch, labels_batch in generator:
-    if i == 1:
-        break
-    features_batch = conv_base.predict(inputs_batch)
-    i += 1
+acc = history.history['acc']
+val_acc = history.history['val_acc']
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs = range(1, len(acc) + 1)
+
+plt.plot(epochs, acc, 'bo')
+plt.plot(epochs, val_acc, 'b')
+plt.figure()
+plt.plot(epochs, loss, 'bo')
+plt.plot(epochs, val_loss, 'b')
+plt.show()
+
+### tf building ###
+
+vgg16 = tf.keras.applications.VGG16(weights='imagenet', include_top=False)
+vgg16.summary()
+
+def tf_extract_features(directory, sample_count):
+    '''
+    function: tf pre-trained model에서 FC레이어를 제외한 결과 얻기
     
-features = np.zeros(shape=[2000, 4, 4, 512])
-features[0:20] = features_batch
+    inputs:
+        - directory: data dir
+        - sample_count: data length
+    
+    outputs:
+        - features: al-layer를 통과한 뒤 나오는 array
+        - labels: 통과 뒤 나오는 label 확률값
+    '''
+    features = np.zeros(shape=(sample_count, 4, 4, 512)) # final output
+    labels = np.zeros(shape=(sample_count)) # label layer <-- dataset
+    generator = datagen.flow_from_directory(directory, target_size=(150, 150),
+                                            batch_size=batch_size, class_mode='binary') # data generator
+    i = 0
+    for inputs_batch, labels_batch in generator:
+        if i * batch_size >= sample_count: # batch가 data 넘어갈 경우
+            break
+        features_batch = vgg16.predict(inputs_batch)
+        features[i * batch_size: (i+1) * batch_size] = features_batch
+        labels[i * batch_size: (i+1) * batch_size] = labels_batch
+        print("%dth features[%d: %d] complete" %(i, i*batch_size, (i+1)*batch_size))
+        i += 1
+    return features, labels
+    
+## tf rest building ##
+tf.reset_default_graph()
+X = tf.placeholder(dtype=tf.float32, shape=[None, 4*4*512])
+y = tf.placeholder(dtype=tf.float32, shape=[None, 1])
+
+W1 = tf.get_variable(name='W1', initializer=tf.contrib.layers.xavier_initializer(), shape=(4*4*512, 256))
+b1 = tf.Variable(tf.zeros(shape=[256]))
+Dense1 = tf.nn.relu(tf.matmul(X, W1) + b1)
+
+W2 = tf.get_variable(name='W2', initializer=tf.contrib.layers.xavier_initializer(), shape=(256, 1))
+b2 = tf.Variable(tf.zeros(shape=[1]))
+Dense2 = tf.matmul(Dense1, W2) + b2
+
+cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=Dense2, labels=y))
+train = tf.train.AdamOptimizer().minimize(cost)
+
+predicted = tf.cast(tf.nn.sigmoid(Dense2) > 0.5, dtype=tf.float32) # 임계치 0.5
+accuracy = tf.reduce_mean(tf.cast(tf.equal(predicted, y), dtype=tf.float32)) # equal수의 mean --> 정확도
+
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+    dataset = tf.data.Dataset.from_tensor_slices((X, y))
+    dataset = dataset.repeat().batch(20)
+    iterator = dataset.make_initializable_iterator()
+    next_element = iterator.get_next()
+    sess.run(iterator.initializer, feed_dict={X:train_features,  y:train_labels})
+    
+    for epoch in range(30):
+        total_batch = int(train_features.shape[0] / 20)
+        total_cost = 0
+        for i in range(total_batch):
+            x_batch, y_batch = sess.run(next_element)
+            cost_val, _ = sess.run([cost, train], feed_dict={X: x_batch, y: y_batch})
+            total_cost += cost_val / total_batch
+        print("cost: ", total_cost)
+
+    y_hat, acc, cor = sess.run([tf.nn.sigmoid(Dense2), accuracy, predicted], feed_dict={X: validation_features, y:validation_labels}) # 예측값 run
+    print(acc)
+
 
 
 
