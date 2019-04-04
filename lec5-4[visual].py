@@ -22,10 +22,6 @@ test_datagen = ImageDataGenerator(rescale=1./255) # pixel (0, 255) --> (0, 1)
 # rescale / class num #
 
 
-validation_generator = test_datagen.flow_from_directory(validation_dir,
-                                                        target_size=(150, 150),
-                                                        batch_size=20,
-                                                        class_mode='binary')
 
 model = models.Sequential()
 model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(150, 150, 3)))
@@ -54,6 +50,11 @@ train_generator = train_datagen.flow_from_directory(train_dir,
                                                     batch_size=32,
                                                     class_mode='binary')
 
+
+validation_generator = test_datagen.flow_from_directory(validation_dir,
+                                                        target_size=(150, 150),
+                                                        batch_size=20,
+                                                        class_mode='binary')
 
 history = model.fit_generator(train_generator, steps_per_epoch=100, epochs=100,
                               validation_data=validation_generator, validation_steps=50)
