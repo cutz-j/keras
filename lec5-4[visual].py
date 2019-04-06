@@ -8,6 +8,7 @@ from keras.preprocessing.image import ImageDataGenerator
 import os
 from keras import optimizers
 
+tf.reset_default_graph()
 ### data-set ###
 origin_dir = "d:/data/dogs-vs-cats/train"
 base_dir = "d:/data/dnc"
