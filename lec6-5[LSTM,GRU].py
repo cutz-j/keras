@@ -5,7 +5,8 @@ from keras.layers import Dense, Embedding, LSTM
 from keras.models import Sequential
 import numpy as np
 import tensorflow as tf
-from keras.datasets import mnist
+from tensorflow.examples.tutorials import mnist
+from tensorflow.examples.tutorials.mnist import input_data
 
 max_features = 10000 # 사용단어
 maxlen = 500 # 최대길이
@@ -45,7 +46,38 @@ seq_length = tf.placeholder(tf.int32, [None])
 output_seqs, states = tf.nn.dynamic_rnn(basic_cell, X, dtype=tf.float32,
                                         sequence_length=seq_length)
 
-(x_train, y_train), (x_test, y_test) = mnist.load_data(path='d:/data/mnist.npz')
+## hypter parameter ##
+tf.reset_default_graph()
+n_steps = 20
+n_inputs = 28
+n_neurons = 150
+n_outputs= 10
+
+learning_rate = 0.01
+
+x = tf.placeholder(tf.float32, [None, n_steps, n_inputs])
+y = tf.placeholder(dtype=tf.int32, shape=[None])
+
+basic_cell = tf.contrib.rnn.BasicRNNCell(num_units=n_neurons)
+output, state = tf.nn.dynamic_rnn(basic_cell, x, dtype=tf.float32)
+
+logits = tf.layers.dense(state, n_outputs)
+
+loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits)
+optimizer = tf.train.AdamOptimizer(learning_rate)
+train = optimizer.minimize(loss)
+
+n_epochs = 100
+
+
+
+
+
+
+
+
+
+
 
 
 
