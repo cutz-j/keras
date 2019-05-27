@@ -19,3 +19,4 @@ for input_t in inputs:
     state_t = output_t # state updates
 
 final_output = np.stack(successive_outputs, axis=0)
+
